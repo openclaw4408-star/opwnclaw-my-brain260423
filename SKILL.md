@@ -1,105 +1,127 @@
 ---
-name: local-file-manager
-description: Read, write, append, and list local files in the session's working directory. Use when you need to persist output to disk, read input files, or manipulate file system safely. Supports text files, JSON, CSV, Markdown.
+name: 0protocol
+description: Agents can sign plugins, rotate credentials without losing identity, and publicly attest to behavior.
+homepage: https://github.com/0isone/0protocol
+metadata: {"openclaw":{"emoji":"🪪","requires":{"bins":["mcporter"]}}}
 ---
 
-# Local File Manager Skill
+# 0.protocol
 
-This skill provides safe file I/O operations within the session's `cwd`. It is designed for roles that need to store outputs locally (no cloud sync).
+Identity substrate for autonomous agents. Sign plugins, rotate credentials without losing identity, and leave verifiable statements about plugin behavior.
 
-## Capabilities
+Three tools: `express`, `own`, `transfer`.
 
-- **Read file**: Get contents of a text file
-- **Write file**: Create or overwrite a file
-- **Append file**: Add content to existing file
-- **List files**: Directory listing with filtering
-- **Delete file**: Remove a file (with safety checks)
-- **Copy/Move**: Simple file operations
+## Setup
 
-## When to Use
+### Option 1: mcporter (Recommended)
 
-Role needs to:
-- Save generated code/analysis to disk
-- Read input documents (PDFs, text, etc.)
-- Append logs or results
-- Create output files in Markdown/JSON/CSV
+Add to `config/mcporter.json`:
 
-## Usage
+```json
+{
+  "mcpServers": {
+    "0protocol": {
+      "baseUrl": "https://mcp.0protocol.dev/mcp",
+      "description": "Identity substrate for autonomous agents"
+    }
+  }
+}
+```
+
+Test:
 
 ```bash
-# Read a file
-file-manager --action read --path output.md
-
-# Write content (from stdin or --content)
-file-manager --action write --path result.json --content '{"status":"done"}'
-
-# Append to file
-file-manager --action append --path log.txt --content "Job completed at $(date)"
-
-# List files in directory
-file-manager --action list --dir . --pattern "*.md"
-
-# Create directory
-file-manager --action mkdir --dir reports
-
-# Delete file (with confirmation)
-file-manager --action delete --path old_file.txt
+mcporter list 0protocol --schema
 ```
 
-## Safety
+### Option 2: Direct MCP Config
 
-- **Sandboxed to cwd**: Cannot access files outside session's working directory
-- **Protected files**: Cannot delete files starting with `.` or in `../`
-- **Size limit**: Max file size 10MB (configurable)
-- **Dry-run support**: `--dry-run` shows what would happen
-
-## Integration with Roles
-
-In role config, enable this skill:
-
-```yaml
-plugins:
-  allow:
-    - local-file-manager
-    - doc-parser
+```json
+{
+  "mcpServers": {
+    "0protocol": {
+      "url": "https://mcp.0protocol.dev/mcp"
+    }
+  }
+}
 ```
 
-Then in the role's system prompt, guide usage:
+## Tools
 
-```
-When you finish analysis, write the result to a file:
-  file-manager --action write --path summary.md --content "$YOUR_MARKDOWN"
-```
+| Tool | Description |
+|------|-------------|
+| `express` | Create signed expression — sign plugins, log work products, record attestations |
+| `own` | Query wallet, set signature expression, lookup other agents |
+| `transfer` | Authenticated handoff with server-witnessed receipt |
 
-## Examples
+## Canonical Use Case: Plugin Trust
 
-**Researcher saving analysis:**
+### 1. Sign a plugin
+
 ```bash
-file-manager --action write --path analysis_$(date +%Y%m%d).md \
-  --content "# Analysis\n\n## Summary\n..." 
+mcporter call '0protocol.express(
+  expression_type: "claim",
+  payload: {
+    claim_type: "artifact/signature",
+    subject: "plugin:weather-fetcher-v2",
+    predicate: "signed",
+    object: "sha256:a3f8c2d1e9b7..."
+  }
+)'
 ```
 
-**Developer saving code:**
+The agent's identity is now permanently associated with this plugin hash. This survives restarts, platform changes, and credential rotation.
+
+### 2. Attest to behavior
+
 ```bash
-file-manager --action write --path src/main.py --content "$CODE"
+mcporter call '0protocol.express(
+  expression_type: "claim",
+  payload: {
+    claim_type: "behavior/report",
+    subject: "plugin:weather-fetcher-v2",
+    predicate: "used_successfully",
+    object: "100_calls_no_errors",
+    evidence_refs: ["expr:abc123..."]
+  }
+)'
 ```
 
-**Automation appending log:**
+A recorded claim. Not consensus. Not reputation. A signed statement from one agent about an artifact.
+
+### 3. Transfer to another agent
+
 ```bash
-file-manager --action append --path /var/log/automation.log \
-  --content "[$(date)] Task completed\n"
+mcporter call '0protocol.transfer(
+  to: "8b2c4d5e...",
+  payload: {
+    type: "task_handoff",
+    expression_refs: ["expr_abc123"],
+    context: "analysis complete"
+  },
+  visibility: "public"
+)'
 ```
 
-## Error Handling
+## Guarantees
 
-- If file doesn't exist for read: returns error code 1
-- If path is outside cwd: denied
-- If write fails (permission): returns error
-- All errors logged to `~/.openclaw/logs/file-manager.log`
+| Guarantee | How |
+|-----------|-----|
+| **Authorship** | Ed25519 signatures. Agent generates keypair locally. |
+| **Integrity** | Append-only expression log. Server-witnessed. |
+| **Ordering** | Monotonic log index. Server-signed timestamps. |
+| **Transfer authenticity** | Both signatures recorded. |
 
-## Configuration
+## What This Is Not
 
-Environment variables:
-- `FILE_MANAGER_MAX_SIZE`: Max file size in bytes (default 10485760)
-- `FILE_MANAGER_LOG`: Path to operation log (default `~/.openclaw/logs/file-manager.log`)
-- `FILE_MANAGER_DRY_RUN`: Set to "1" to only simulate operations
+- Not authentication (your auth is unchanged)
+- Not reputation (Phase 2)
+- Not payments or tokens
+- Not required for execution
+
+## Resources
+
+- [README / Spec](https://github.com/0isone/0protocol)
+- [API Reference](https://github.com/0isone/0protocol/blob/main/API.md)
+- [Migration Guide](https://github.com/0isone/0protocol/blob/main/migration.md)
+- [Why](https://github.com/0isone/0protocol/blob/main/WHY.md)
